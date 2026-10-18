@@ -38,9 +38,12 @@ export const getRoastData = async (req: Request, res: Response) => {
         const resultData = await deduplicateRequest(
             cacheKey,
             async () => {
+                console.log(`[DEDUP] Starting new operation for: ${cacheKey}`);
                 //Check the cache again in case another operation populated it
                 const existingResult = roastCache.get(cacheKey);
+
                 if (existingResult) {
+                    console.log(`[CACHE] Result found for: ${cacheKey}`);
                     return existingResult;
                 }
 
