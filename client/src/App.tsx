@@ -1,5 +1,6 @@
 import { useState } from "react";
-
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 function App() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
@@ -163,7 +164,34 @@ function App() {
                 </p>
               </div>
             </div>
+            {githubData.roast && (
+              <div className="mt-6 rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 to-red-500/5 p-5">
+                <div className="mb-4 flex items-center gap-3">
+                  <span className="text-3xl">💀</span>
 
+                  <div>
+                    <h3 className="text-lg font-black text-orange-400">
+                      YOUR GITHUB ROAST
+                    </h3>
+
+                    <p className="text-xs text-zinc-500">
+                      You asked for it. Don't blame us.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="prose prose-invert prose-sm max-w-none text-zinc-200
+                prose-headings:font-bold
+                prose-headings:text-orange-400
+                prose-strong:text-orange-300
+                prose-a:text-orange-400
+                prose-li:marker:text-orange-400">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {githubData.roast}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            )}
             <div className="mt-6 grid grid-cols-2 gap-4">
               <div className="rounded-xl bg-white/[0.04] p-4">
                 <p className="text-sm text-zinc-500">Public Repositories</p>

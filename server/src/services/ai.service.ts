@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config();
 import Groq from "groq-sdk";
 
 const apiKey = process.env.GROQ_API_KEY;
@@ -63,7 +65,7 @@ export const generateRoast = async (data: RoastInput): Promise<string> => {
 
   const completion = await groq.chat.completions.create({
     // Verify that this model is available to your Groq account.
-    model: "llama-3.3-70b-versatile",
+    model: "openai/gpt-oss-120b",
     temperature: 0.9,
     max_completion_tokens: 700,
     messages: [
