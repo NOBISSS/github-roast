@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 
 import roastRoutes from "./routes/roast.routes";
-
+import { roastRateLimiter } from "./middleware/rateLimiter.js";
 dotenv.config();
 
 const app = express();
@@ -23,6 +23,6 @@ app.get("/", (_req, res) => {
   });
 });
 
-app.use("/api/roast", roastRoutes);
+app.use("/api/roast", roastRateLimiter , roastRoutes );
 
 export default app;
