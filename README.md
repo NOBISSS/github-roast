@@ -397,10 +397,7 @@ Please do not include API keys, access tokens, or other secrets in
 commits or issue reports.
 
 ## 📄 License
-
-Choose and add a license file before publishing the project for reuse.
-If you intend to use the MIT License, add a `LICENSE` file containing
-the correct copyright holder and year.
+Please Check LICENCE File
 
 ------------------------------------------------------------------------
 
