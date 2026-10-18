@@ -1,10 +1,12 @@
 import type { Request, Response } from "express";
+
 import { roastCache } from "../cache/roast.cache.js";
+import { deduplicateRequest } from "../cache/roast.request.js";
 
 import {
     getGithubEvents,
     getGithubProfile,
-    getGithubRepositories
+    getGithubRepositories,
 } from "../services/github.service";
 
 import { generateRoast } from "../services/ai.service";
@@ -12,14 +14,16 @@ import { generateRoast } from "../services/ai.service";
 export const getRoastData = async (req: Request, res: Response) => {
     try {
         const username = String(req.params.username ?? "").trim();
-        if (!username || typeof username !== "string") {
+
+        if (!username) {
             return res.status(400).json({
                 success: false,
                 message: "Please provide a valid GitHub username.",
             });
         }
-    
+
         const cacheKey = username.toLowerCase();
+
         const cachedResult = roastCache.get(cacheKey);
 
         if (cachedResult) {
@@ -30,36 +34,47 @@ export const getRoastData = async (req: Request, res: Response) => {
             });
         }
 
-        const [profile, repositories, events] = await Promise.all([
-            getGithubProfile(username),
-            getGithubRepositories(username),
-            getGithubEvents(username),
-        ]);
+        //Reuse an existing in-progress request for this username
+        const resultData = await deduplicateRequest(
+            cacheKey,
+            async () => {
+                //Check the cache again in case another operation populated it
+                const existingResult = roastCache.get(cacheKey);
+                if (existingResult) {
+                    return existingResult;
+                }
 
-        const roast = await generateRoast({
-            profile,
-            repositories,
-            events,
-        });
+                //Fetch GitHub data.
+                const [profile, repositories, events] = await Promise.all([
+                    getGithubProfile(username),
+                    getGithubRepositories(username),
+                    getGithubEvents(username),
+                ]);
 
-        const resultData = {
-            profile,
-            repositories,
-            events,
-            roast,
-        };
+                //Generate the AI roast.
+                const roast = await generateRoast({
+                    profile,
+                    repositories,
+                    events,
+                });
 
-        roastCache.set(cacheKey, resultData, 10 * 60 * 1000);
+                //Cache the completed result for 10 minutes.
+                const data = {
+                    profile,
+                    repositories,
+                    events,
+                    roast,
+                };
+
+                roastCache.set(cacheKey, data, 10 * 60 * 1000);
+                return data;
+            },
+        );
 
         return res.status(200).json({
             success: true,
             message: "Your GitHub roast is ready! 🔥",
-            data: {
-                profile,
-                repositories,
-                events,
-                roast,
-            },
+            data: resultData,
         });
     } catch (error: unknown) {
         const status =
@@ -71,16 +86,13 @@ export const getRoastData = async (req: Request, res: Response) => {
                 "status" in error.response
                 ? error.response.status
                 : undefined;
-
         if (status === 404) {
             return res.status(404).json({
                 success: false,
                 message: "GitHub user not found. Check the username and try again.",
             });
         }
-
         console.error("Roast generation failed:", error);
-
         return res.status(502).json({
             success: false,
             message:
@@ -88,15 +100,30 @@ export const getRoastData = async (req: Request, res: Response) => {
         });
     }
 };
-
-function axiosIsNotFound(error: unknown): boolean {
-    return (
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error &&
-        typeof error.response === "object" &&
-        error.response !== null &&
-        "status" in error.response &&
-        error.response.status === 404
-    );
-}
+/*
+                    Incoming request
+                           |
+                           v
+                     Normalize name
+                           |
+                           v
+                      Check cache
+                      /          \
+                   HIT            MISS
+                    |               |
+                    v               v
+               Return result   Check pending requests
+                                   /       \
+                              Existing    New request
+                                 |            |
+                                 v            v
+                              Wait       Fetch GitHub
+                                 |            |
+                                 |            v
+                                 |        Generate roast
+                                 |            |
+                                 |            v
+                                 |        Cache result
+                                 |            |
+                                 +------> Return result
+*/
