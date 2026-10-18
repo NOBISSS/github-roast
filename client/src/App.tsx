@@ -2,18 +2,44 @@ import { useState } from "react";
 
 function App() {
   const [username, setUsername] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [githubData, setGithubData] = useState<any>(null);
 
-  const handleRoast = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleRoast = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
 
     const trimmedUsername = username.trim();
 
-    if (!trimmedUsername) {
-      return;
-    }
+    if (!trimmedUsername) return;
 
-    // We'll connect the GitHub API here in our next milestone.
-    console.log("GitHub username:", trimmedUsername);
+    setLoading(true);
+    setError("");
+    setGithubData(null);
+
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/roast/${encodeURIComponent(trimmedUsername)}`,
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Something went wrong.");
+      }
+
+      setGithubData(result.data);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to fetch GitHub data.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -94,13 +120,99 @@ function App() {
 
           <button
             type="submit"
-            disabled={!username.trim()}
+            disabled={!username.trim() || loading}
             className="rounded-xl bg-orange-500 px-7 py-4 text-sm font-bold text-white transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-40 sm:py-3"
           >
-            🔥 Roast Me
+            {loading ? "🔥 Fetching..." : "🔥 Roast Me"}
           </button>
         </form>
+        {error && (
+          <div
+            role="alert"
+            className="mt-6 w-full max-w-xl rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300"
+          >
+            {error}
+          </div>
+        )}
 
+        {githubData && (
+          <div className="mt-10 w-full max-w-xl rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-left">
+            <div className="flex items-center gap-4">
+              <img
+                src={githubData.profile.avatar_url}
+                alt={`${githubData.profile.login}'s avatar`}
+                className="h-16 w-16 rounded-full border border-white/10"
+              />
+
+              <div>
+                <h2 className="text-xl font-bold">
+                  {githubData.profile.name || githubData.profile.login}
+                </h2>
+
+                <a
+                  href={githubData.profile.html_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm text-orange-400 hover:text-orange-300"
+                >
+                  @{githubData.profile.login}
+                </a>
+
+                <p className="mt-1 text-sm text-zinc-400">
+                  {githubData.profile.bio || "No bio. Mysterious developer. 💀"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-4">
+              <div className="rounded-xl bg-white/[0.04] p-4">
+                <p className="text-sm text-zinc-500">Public Repositories</p>
+                <p className="mt-2 text-2xl font-bold">
+                  {githubData.profile.public_repos}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white/[0.04] p-4">
+                <p className="text-sm text-zinc-500">Followers</p>
+                <p className="mt-2 text-2xl font-bold">
+                  {githubData.profile.followers}
+                </p>
+              </div>
+            </div>
+
+            <h3 className="mt-6 mb-3 font-bold">Recently Updated Repositories</h3>
+
+            <div className="space-y-3">
+              {githubData.repositories.map((repo: any) => (
+                <a
+                  key={repo.id}
+                  href={repo.html_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-xl border border-white/[0.08] p-4 transition hover:border-orange-500/30"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">{repo.name}</span>
+
+                    <span className="shrink-0 text-xs text-zinc-500">
+                      ⭐ {repo.stargazers_count}
+                    </span>
+                  </div>
+
+                  <p className="mt-2 line-clamp-2 text-sm text-zinc-500">
+                    {repo.description || "No repository description."}
+                  </p>
+
+                  {repo.language && (
+                    <span className="mt-3 inline-block text-xs text-orange-300">
+                      {repo.language}
+                    </span>
+                  )}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
         <p className="mt-4 text-xs text-zinc-600">
           No account needed. Just a public GitHub username.
         </p>
