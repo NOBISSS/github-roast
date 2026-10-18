@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 
 import { roastCache } from "../cache/roast.cache.js";
 import { deduplicateRequest } from "../cache/roast.request.js";
-
+import { isValidGithubUsername } from "../utils/validateGithubUsername.js";
 import {
     getGithubEvents,
     getGithubProfile,
@@ -15,10 +15,11 @@ export const getRoastData = async (req: Request, res: Response) => {
     try {
         const username = String(req.params.username ?? "").trim();
 
-        if (!username) {
+        if (!isValidGithubUsername(username)) {
             return res.status(400).json({
                 success: false,
-                message: "Please provide a valid GitHub username.",
+                message:
+                    "Invalid GitHub username. Use 1–39 letters, numbers, or single hyphens between characters.",
             });
         }
 
