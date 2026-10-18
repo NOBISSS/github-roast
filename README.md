@@ -131,11 +131,9 @@ Install the following before running the project:
 ### 1. Clone the repository
 
 ``` bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
+git clone https://github.com/NOBISSS/github-roast
 cd github-roast
 ```
-
-Replace `<YOUR_GITHUB_REPOSITORY_URL>` with your repository's clone URL.
 
 ### 2. Install frontend dependencies
 
