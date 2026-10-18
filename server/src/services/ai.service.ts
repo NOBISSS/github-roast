@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
+import { ApiError } from "../utils/apiError.js";
 import Groq from "groq-sdk";
 
 const apiKey = process.env.GROQ_API_KEY;
@@ -8,7 +9,11 @@ if (!apiKey) {
     throw new Error("GROQ_API_KEY is missing from the environment variables.");
 }
 
-const groq = new Groq({ apiKey });
+const groq = new Groq({
+    apiKey,
+    timeout: 30_000,
+    maxRetries: 1,
+});
 
 interface RoastInput {
     profile: {
@@ -62,20 +67,19 @@ export const generateRoast = async (data: RoastInput): Promise<string> => {
             repository: event.repo.name,
         })),
     };
-
-    const completion = await groq.chat.completions.create({
-        // Verify that this model is available to your Groq account.
-        model: "openai/gpt-oss-120b",
-        temperature: 0.9,
-        max_completion_tokens: 700,
-        messages: [
-            {
-                role: "system",
-                content: `
+    try {
+        const completion = await groq.chat.completions.create({
+            model: "openai/gpt-oss-120b",
+            temperature: 0.9,
+            max_completion_tokens: 700,
+            messages: [
+                {
+                    role: "system",
+                    content: `
 You are GitHub Roast, an entertaining AI developer roast generator.
 
-Your job is to analyze the supplied public GitHub profile, repositories,
-and available public events, then generate a funny, clever, personalized roast.
+Analyze the supplied public GitHub profile, repositories, and available
+public events. Generate a funny, clever, personalized roast.
 
 IMPORTANT RULES:
 - Base every observation on the supplied data.
@@ -110,30 +114,101 @@ End with one memorable, funny punchline personalized to the profile.
 
 FORMATTING RULES:
 - Use valid GitHub Flavored Markdown.
-- Use headings to separate sections.
-- Use bullet points or numbered lists.
-- Use **bold** to highlight important words and repository names.
-- Keep paragraphs short, ideally 1-3 sentences.
+- Use headings, bullet points, numbered lists, and bold text.
+- Keep paragraphs short.
 - Use blockquotes for particularly funny punchlines.
-- Avoid unnecessary emojis.
 - Do not wrap the response in Markdown code fences.
-- Do not include a preamble explaining what you are doing.
-- If a section lacks enough evidence, omit it rather than inventing content.
-- Keep the entire roast concise and entertaining.
-`
-            },
-            {
-                role: "user",
-                content: JSON.stringify(compactData),
-            },
-        ],
-    });
+- Omit sections that lack sufficient evidence.
+- Keep the roast concise and entertaining.
+`,
+                },
+                {
+                    role: "user",
+                    content: JSON.stringify(compactData),
+                },
+            ],
+        });
+        const roast = completion.choices[0]?.message?.content?.trim();
+        if (!roast) {
+            throw new ApiError(
+                502,
+                "The AI returned an empty roast. Please try again.",
+            );
+        }
+        return roast;
+    } catch (error: unknown) {
+        // Preserve errors that have already been classified.
+        if (error instanceof ApiError) {
+            throw error;
+        }
 
-    const roast = completion.choices[0]?.message?.content?.trim();
+        if (error instanceof Groq.APIError) {
+            const status = error.status;
 
-    if (!roast) {
-        throw new Error("The AI returned an empty roast.");
+            if (status === 429) {
+                throw new ApiError(
+                    429,
+                    "The AI service is busy. Please try again later.",
+                );
+            }
+
+            if (status === 401 || status === 403) {
+                console.error("Groq authentication or permission failure:", {
+                    status,
+                    requestID: error.requestID,
+                });
+
+                throw new ApiError(
+                    503,
+                    "The AI service is temporarily unavailable.",
+                );
+            }
+
+            if (status === 404) {
+                console.error("Configured Groq model was not found.", {
+                    requestID: error.requestID,
+                });
+
+                throw new ApiError(
+                    503,
+                    "The AI service is temporarily unavailable.",
+                );
+            }
+
+            console.error("Groq API request failed:", {
+                status,
+                requestID: error.requestID,
+            });
+
+            throw new ApiError(
+                502,
+                "The AI service could not generate your roast.",
+            );
+        }
+
+        if (
+            error instanceof Error &&
+            (error.name === "APIConnectionTimeoutError" ||
+                error.name === "TimeoutError")
+        ) {
+            throw new ApiError(
+                504,
+                "The AI request timed out. Please try again.",
+            );
+        }
+
+        if (error instanceof Error && error.name === "APIConnectionError") {
+            throw new ApiError(
+                503,
+                "Unable to connect to the AI service. Please try again later.",
+            );
+        }
+
+        console.error("Unexpected AI service error:", error);
+
+        throw new ApiError(
+            500,
+            "An unexpected error occurred while generating your roast.",
+        );
     }
-
-    return roast;
 };
