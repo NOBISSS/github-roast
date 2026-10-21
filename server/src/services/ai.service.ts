@@ -155,7 +155,6 @@ FORMATTING RULES:
             if (status === 401 || status === 403) {
                 console.error("Groq authentication or permission failure:", {
                     status,
-                    requestID: error.requestID,
                 });
 
                 throw new ApiError(
@@ -165,9 +164,7 @@ FORMATTING RULES:
             }
 
             if (status === 404) {
-                console.error("Configured Groq model was not found.", {
-                    requestID: error.requestID,
-                });
+                console.error("Configured Groq model was not found.");
 
                 throw new ApiError(
                     503,
@@ -177,7 +174,7 @@ FORMATTING RULES:
 
             console.error("Groq API request failed:", {
                 status,
-                requestID: error.requestID,
+               
             });
 
             throw new ApiError(

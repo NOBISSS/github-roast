@@ -23,9 +23,9 @@ export const getRoastData = async (req: Request, res: Response) => {
             });
         }
 
-        const cacheKey = username.toLowerCase();
+        const cacheKey = `github-roast:cache:${username.toLowerCase()}`;
 
-        const cachedResult = roastCache.get(cacheKey);
+        const cachedResult = await roastCache.get(cacheKey);
 
         if (cachedResult) {
             return res.status(200).json({
@@ -41,7 +41,7 @@ export const getRoastData = async (req: Request, res: Response) => {
             async () => {
                 console.log(`[DEDUP] Starting new operation for: ${cacheKey}`);
                 //Check the cache again in case another operation populated it
-                const existingResult = roastCache.get(cacheKey);
+                const existingResult = await roastCache.get(cacheKey);
 
                 if (existingResult) {
                     console.log(`[CACHE] Result found for: ${cacheKey}`);
@@ -70,7 +70,7 @@ export const getRoastData = async (req: Request, res: Response) => {
                     roast,
                 };
 
-                roastCache.set(cacheKey, data, 10 * 60 * 1000);
+                await roastCache.set(cacheKey, data, 10 * 60 * 1000);
                 return data;
             },
         );

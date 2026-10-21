@@ -1,39 +1,50 @@
-interface CacheEntry<T> {
-    data: T;
-    expiresAt: number;
-}
+import { redis } from "../config/redis.js";
 
 class RoastCache {
-    private cache = new Map<string, CacheEntry<unknown>>();
+    async set<T>(key: string, data: T, ttlMs: number): Promise<void> {
+        if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
+            throw new Error("Cache TTL must be a positive number.");
+        }
 
-    set<T>(key: string, data: T, ttlMs: number): void {
-        this.cache.set(key, {
-            data,
-            expiresAt: Date.now() + ttlMs,
-        });
+        const serializedData = JSON.stringify(data);
+        const ttlSeconds = Math.ceil(ttlMs / 1000);
+
+        await redis.set(key, serializedData, "EX", ttlSeconds);
     }
 
-    get<T>(key: string): T | null {
-        const entry = this.cache.get(key);
+    async get<T>(key: string): Promise<T | null> {
+        const cachedData = await redis.get(key);
 
-        if (!entry) {
+        if (cachedData === null) {
             return null;
         }
 
-        if (Date.now() >= entry.expiresAt) {
-            this.cache.delete(key);
-            return null;
-        }
-
-        return entry.data as T;
+        return JSON.parse(cachedData) as T;
     }
 
-    delete(key: string): void {
-        this.cache.delete(key);
+    async delete(key: string): Promise<void> {
+        await redis.del(key);
     }
 
-    clear(): void {
-        this.cache.clear();
+    async clear(): Promise<void> {
+        // Only delete keys belonging to this application's cache.
+        let cursor = "0";
+
+        do {
+            const [nextCursor, keys] = await redis.scan(
+                cursor,
+                "MATCH",
+                "github-roast:cache:*",
+                "COUNT",
+                100,
+            );
+
+            cursor = nextCursor;
+
+            if (keys.length > 0) {
+                await redis.del(...keys);
+            }
+        } while (cursor !== "0");
     }
 }
 
